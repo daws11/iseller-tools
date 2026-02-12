@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cek Penjualan Produk iSeller (Local Server)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .log-area::-webkit-scrollbar { width: 8px; }
+        .log-area::-webkit-scrollbar-track { background: #f1f1f1; }
+        .log-area::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        .log-area::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-6 font-sans">
+
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="bg-indigo-600 p-6 text-white flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">Laporan Penjualan (Via Node.js)</h1>
+                <p class="text-indigo-100 text-sm mt-1">Menggunakan Local Proxy Server :3000</p>
+            </div>
+            <div id="serverStatus" class="bg-red-500 text-xs px-2 py-1 rounded font-bold">Server Offline?</div>
+        </div>
+
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Configuration Column -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-semibold text-gray-700 border-b pb-2">Konfigurasi</h2>
+                
+                <!-- Client ID -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Client ID</label>
+                    <input type="text" id="clientId" value="3937ab3044294369924c292c74c8b975" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 border p-2 text-sm">
+                </div>
+
+                <!-- Client Secret -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Client Secret</label>
+                    <input type="password" id="clientSecret" value="secret-LkC6AvsPtrX8kU8aCUQn0PbpGfaaw73FRggsPA4o1bv/wyg1nBoqgSx4h6OxzjFF+tYoQKofvK2zeV+zu+Np12GwDGOAmoGAUffF6yX/vJk=" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 border p-2 text-sm">
+                </div>
+
+                <!-- Store URL -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Store URL</label>
+                    <input type="text" id="storeUrl" value="https://thisisbali.isellershop.com" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 border p-2 text-sm">
+                </div>
+
+                <hr class="border-gray-200 my-4">
+
+                <!-- LOAD PRODUCTS -->
+                <div class="bg-yellow-50 p-3 rounded border border-yellow-200">
+                    <label class="block text-sm font-medium text-gray-800 mb-2">Langkah 1: Muat Data Produk</label>
+                    <button id="btnLoadProducts" onclick="loadAllProducts()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-bold py-2 px-4 rounded transition duration-200 flex justify-center items-center gap-2 mb-2">
+                        <span>Muat Daftar Produk</span>
+                        <svg id="spinnerProducts" class="animate-spin h-4 w-4 text-white hidden" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    </button>
+                    
+                    <select id="productSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-sm bg-white" disabled>
+                        <option value="">-- Klik tombol Muat Daftar Produk dahulu --</option>
+                    </select>
+                </div>
+
+                <!-- Date Range -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tanggal Mulai</label>
+                        <input type="date" id="startDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 border p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Tanggal Akhir</label>
+                        <input type="date" id="endDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 border p-2 text-sm">
+                    </div>
+                </div>
+
+                <!-- Action Button -->
+                <button id="btnProcess" onclick="startSalesProcess()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded transition duration-200 flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <span id="btnText">Langkah 2: Cari Penjualan</span>
+                    <svg id="btnSpinner" class="animate-spin h-5 w-5 text-white hidden" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                </button>
+            </div>
+
+            <!-- Log & Result Column -->
+            <div class="flex flex-col h-full">
+                <h2 class="text-lg font-semibold text-gray-700 border-b pb-2 mb-4">Log Proses & Hasil</h2>
+                
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 hidden" id="resultBox">
+                    <h3 class="text-green-800 font-bold text-lg">Hasil Pencarian</h3>
+                    <div class="grid grid-cols-2 gap-4 mt-2">
+                        <div>
+                            <p class="text-sm text-gray-500">Total Terjual</p>
+                            <p class="text-2xl font-bold text-green-700" id="resQty">0 Pcs</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Order Dicek</p>
+                            <p class="text-2xl font-bold text-blue-700" id="resOrders">0</p>
+                        </div>
+                    </div>
+                    <button id="btnExportCsv" onclick="downloadCsv()" class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-200 hidden">
+                        Export to CSV
+                    </button>
+                </div>
+
+                <div id="logArea" class="log-area flex-1 bg-gray-900 text-green-400 font-mono text-xs p-4 rounded-lg overflow-y-auto h-96 whitespace-pre-wrap leading-tight">Menunggu koneksi server local...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Jika hostname adalah localhost, gunakan port 3000, jika tidak gunakan path relatif /api
+        const LOCAL_SERVER = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
+            ? "http://localhost:3000" 
+            : "/api";
+        const logArea = document.getElementById('logArea');
+        
+        // Cek Status Server saat load
+        (async function checkServer() {
+            try {
+                // Mencoba hit endpoint auth dengan data dummy sekedar cek koneksi
+                await fetch(LOCAL_SERVER + '/auth', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({}) });
+                document.getElementById('serverStatus').innerText = "Server Online";
+                document.getElementById('serverStatus').className = "bg-green-500 text-xs px-2 py-1 rounded font-bold text-white";
+                log("Terhubung ke Local Proxy Server.", "highlight");
+            } catch (e) {
+                log("PERINGATAN: Server Node.js belum berjalan di localhost:3000.", "error");
+            }
+        })();
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            let colorClass = 'text-green-400';
+            if (type === 'error') colorClass = 'text-red-400';
+            if (type === 'highlight') colorClass = 'text-cyan-300 font-bold';
+            logArea.innerHTML += `<span class="text-gray-500">[${timestamp}]</span> <span class="${colorClass}">${message}</span>\n`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function clearLog() { logArea.innerHTML = ''; }
+
+        function getCredentials() {
+            return {
+                client_id: document.getElementById('clientId').value,
+                client_secret: document.getElementById('clientSecret').value,
+                store_url: document.getElementById('storeUrl').value
+            };
+        }
+
+        window.onload = function() {
+            const today = new Date();
+            const firstDay = new Date(today.getFullYear(), 0, 1);
+            document.getElementById('startDate').value = firstDay.toISOString().split('T')[0];
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+        }
+
+        // --- AUTH (VIA PROXY) ---
+        async function getAccessToken(creds) {
+            try {
+                const response = await fetch(`${LOCAL_SERVER}/auth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        client_id: creds.client_id, 
+                        client_secret: creds.client_secret 
+                    })
+                });
+                
+                if (!response.ok) throw new Error("Gagal Auth ke Proxy");
+                const data = await response.json();
+                if(data.error) throw new Error(data.error_description || data.error);
+                return data.access_token;
+            } catch (e) {
+                throw new Error(`Auth Error: ${e.message}. Pastikan server.js berjalan.`);
+            }
+        }
+
+        // --- LOAD PRODUCTS (VIA PROXY) ---
+        async function loadAllProducts() {
+            const creds = getCredentials();
+            const btn = document.getElementById('btnLoadProducts');
+            const spinner = document.getElementById('spinnerProducts');
+            const select = document.getElementById('productSelect');
+            const btnProcess = document.getElementById('btnProcess');
+
+            btn.disabled = true; spinner.classList.remove('hidden'); select.disabled = true;
+            clearLog();
+
+            try {
+                log("Minta Token ke Local Server...");
+                const token = await getAccessToken(creds);
+                
+                let page = 1;
+                let hasNext = true;
+                let allProducts = [];
+
+                log("Mulai ambil produk via Local Server...", "highlight");
+
+                while (hasNext) {
+                    log(`Fetch Produk Halaman ${page}...`);
+                    
+                    const response = await fetch(`${LOCAL_SERVER}/products`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            store_url: creds.store_url,
+                            access_token: token,
+                            page: page
+                        })
+                    });
+
+                    if (!response.ok) throw new Error("Gagal fetch products");
+                    const data = await response.json();
+                    
+                    if (data.products) {
+                        data.products.forEach(p => {
+                            if (p.sku) {
+                                allProducts.push({
+                                    id: p.product_id || p.id || "",
+                                    name: p.name,
+                                    sku: p.sku
+                                });
+                            }
+                        });
+                    }
+
+                    hasNext = data.has_next_item;
+                    if (hasNext) page++;
+                }
+
+                allProducts.sort((a, b) => a.name.localeCompare(b.name));
+                select.innerHTML = '<option value="">-- Pilih Produk --</option>';
+                allProducts.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.sku;
+                    option.dataset.productId = p.id || "";
+                    option.dataset.productName = p.name || "";
+                    option.text = `${p.name} (SKU: ${p.sku})`;
+                    select.appendChild(option);
+                });
+
+                select.disabled = false;
+                btnProcess.disabled = false;
+                log(`Selesai! ${allProducts.length} produk dimuat.`, "highlight");
+
+            } catch (error) {
+                log(`ERROR: ${error.message}`, "error");
+            } finally {
+                btn.disabled = false; spinner.classList.add('hidden');
+            }
+        }
+
+        // --- SALES SEARCH (VIA PROXY) ---
+        async function startSalesProcess() {
+            const creds = getCredentials();
+            const productSelect = document.getElementById('productSelect');
+            const selectedOption = productSelect.options[productSelect.selectedIndex];
+            const targetSku = selectedOption?.value || "";
+            const targetProductId = selectedOption?.dataset?.productId || "";
+            const targetProductName = selectedOption?.dataset?.productName || "";
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            if (!targetSku) return alert("Pilih produk!");
+            
+            const btn = document.getElementById('btnProcess');
+            const spinner = document.getElementById('btnSpinner');
+            const resultBox = document.getElementById('resultBox');
+
+            btn.disabled = true; spinner.classList.remove('hidden'); resultBox.classList.add('hidden');
+            document.getElementById('btnExportCsv').classList.add('hidden');
+            window.currentCsvContent = "";
+            clearLog();
+
+            try {
+                const token = await getAccessToken(creds);
+                let page = 1;
+                let hasNext = true;
+                let totalQuantitySold = 0;
+                let totalOrdersChecked = 0;
+                let dailySales = {}; // Map: "YYYY-MM-DD" -> Quantity
+
+                const targetSkuLc = targetSku.toLowerCase().trim();
+                const targetProductIdLc = String(targetProductId || "").toLowerCase().trim();
+                const targetProductNameLc = String(targetProductName || "").toLowerCase().trim();
+
+                log(`Mencari penjualan SKU: ${targetSku}`, "highlight");
+                if (targetProductId) log(`Product ID: ${targetProductId}`, "highlight");
+
+                while (hasNext) {
+                    log(`Cek Orders Halaman ${page}...`);
+                    
+                    const response = await fetch(`${LOCAL_SERVER}/orders`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            store_url: creds.store_url,
+                            access_token: token,
+                            time_zone: 8,
+                            page: page,
+                            page_size: 100,
+                            includes: 'OrderDetails',
+                            payment_status: 'paid',
+                            status: 'completed',
+                            created_after: `${startDate}T00:00:00`,
+                            created_before: `${endDate}T23:59:59`
+                        })
+                    });
+
+                    if (!response.ok) throw new Error("Gagal fetch orders");
+                    const data = await response.json();
+                    
+                    if (data.orders) {
+                        const orders = data.orders;
+                        totalOrdersChecked += orders.length;
+
+                        orders.forEach(order => {
+                            (order.order_details || []).forEach(item => {
+                                const candidateSkus = [
+                                    item.sku,
+                                    item.product_sku,
+                                    item.product_modifier_sku,
+                                    item.modifier_product_sku,
+                                    item.modifierProductSku,
+                                    item.productModifierSku
+                                ]
+                                    .filter(Boolean)
+                                    .map(v => String(v).toLowerCase().trim());
+
+                                const itemProductIdLc = item.product_id ? String(item.product_id).toLowerCase().trim() : "";
+                                const itemProductNameLc = item.product_name ? String(item.product_name).toLowerCase().trim() : "";
+
+                                const isSkuMatch = candidateSkus.includes(targetSkuLc);
+                                const isProductIdMatch = !!(targetProductIdLc && itemProductIdLc && itemProductIdLc === targetProductIdLc);
+                                const isNameMatch = !!(targetProductNameLc && itemProductNameLc && itemProductNameLc === targetProductNameLc);
+
+                                if (isSkuMatch || isProductIdMatch || isNameMatch) {
+                                    const qty = (item.quantity || 0);
+                                    totalQuantitySold += qty;
+                                    
+                                    // Track daily sales
+                                    if (order.order_date) {
+                                        const dateStr = order.order_date.substring(0, 10); // "YYYY-MM-DD"
+                                        dailySales[dateStr] = (dailySales[dateStr] || 0) + qty;
+                                    }
+
+                                    log(`   [MATCH] Order #${order.order_reference} (${order.order_date?.substring(0,10)}): +${qty}`, "highlight");
+                                }
+                            });
+                        });
+                    }
+
+                    hasNext = data.has_next_item;
+                    if (hasNext) page++;
+                }
+
+                document.getElementById('resQty').innerText = totalQuantitySold + " Pcs";
+                document.getElementById('resOrders').innerText = totalOrdersChecked;
+                resultBox.classList.remove('hidden');
+
+                // Generate CSV with all dates
+                let csv = "Date,Quantity\n";
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                
+                // Set window global for filename
+                window.currentProductName = targetProductName || targetSku || "Product";
+
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    const dateIso = d.toISOString().split('T')[0];
+                    const qty = dailySales[dateIso] || 0;
+                    csv += `${dateIso},${qty}\n`;
+                }
+
+                window.currentCsvContent = csv;
+                document.getElementById('btnExportCsv').classList.remove('hidden');
+
+                log("SELESAI.", "highlight");
+
+            } catch (error) {
+                log(`ERROR: ${error.message}`, "error");
+            } finally {
+                btn.disabled = false; spinner.classList.add('hidden');
+            }
+        }
+        function downloadCsv() {
+            if (!window.currentCsvContent) return;
+            const blob = new Blob([window.currentCsvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            // Clean filename
+            const productNameSafe = (window.currentProductName || "sales_report")
+                .replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const dateStr = new Date().toISOString().split('T')[0];
+            const fileName = `${productNameSafe}_${dateStr}.csv`;
+            
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
