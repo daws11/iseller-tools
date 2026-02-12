@@ -10,6 +10,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Health Check Route
+router.get('/', (req, res) => {
+    res.json({ status: 'ok', message: 'Server is running', version: '1.0.1' });
+});
+
 // 1. Route untuk Autentikasi
 router.post('/auth', async (req, res) => {
     try {
@@ -82,9 +87,11 @@ router.post('/orders', async (req, res) => {
 });
 
 // Konfigurasi Path Router
-// Untuk Netlify (Production)
+// Untuk Netlify (Production) - Tangkap path function
 app.use('/.netlify/functions/api', router);
-// Untuk Local Development
+// Backup jika path di-strip atau berbeda
+app.use('/api', router);
+// Untuk Local Development atau fallback
 app.use('/', router);
 
 // Export app untuk Netlify, start listen hanya jika dijalankan langsung
