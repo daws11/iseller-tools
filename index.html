@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cek Penjualan Produk iSeller (Local Server)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         .log-area::-webkit-scrollbar { width: 8px; }
         .log-area::-webkit-scrollbar-track { background: #f1f1f1; }
@@ -55,10 +56,17 @@
                         <span>Muat Daftar Produk</span>
                         <svg id="spinnerProducts" class="animate-spin h-4 w-4 text-white hidden" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                     </button>
-                    
-                    <select id="productSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 text-sm bg-white" disabled>
-                        <option value="">-- Klik tombol Muat Daftar Produk dahulu --</option>
-                    </select>
+
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="flex items-center gap-2 text-xs text-gray-600">
+                            <input type="checkbox" id="selectAllProducts" onchange="toggleSelectAllProducts(this)" disabled>
+                            Pilih Semua
+                        </label>
+                        <span id="selectedCount" class="text-xs text-gray-500">0 dipilih</span>
+                    </div>
+                    <div id="productChecklist" class="border rounded-md bg-white p-2 text-sm h-40 overflow-y-auto text-gray-500">
+                        -- Klik tombol Muat Daftar Produk dahulu --
+                    </div>
                 </div>
 
                 <!-- Date Range -->
@@ -88,7 +96,7 @@
                     <h3 class="text-green-800 font-bold text-lg">Hasil Pencarian</h3>
                     <div class="grid grid-cols-2 gap-4 mt-2">
                         <div>
-                            <p class="text-sm text-gray-500">Total Terjual</p>
+                            <p class="text-sm text-gray-500">Total Terjual (semua produk)</p>
                             <p class="text-2xl font-bold text-green-700" id="resQty">0 Pcs</p>
                         </div>
                         <div>
@@ -96,8 +104,17 @@
                             <p class="text-2xl font-bold text-blue-700" id="resOrders">0</p>
                         </div>
                     </div>
-                    <button id="btnExportCsv" onclick="downloadCsv()" class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-200 hidden">
-                        Export to CSV
+                    <table class="w-full text-sm mt-3">
+                        <thead>
+                            <tr class="text-left text-gray-500 border-b">
+                                <th class="py-1">Produk</th>
+                                <th class="py-1 text-right">Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productSummaryBody"></tbody>
+                    </table>
+                    <button id="btnExportExcel" onclick="downloadExcel()" class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-200 hidden">
+                        Export ke Excel (1 sheet per produk)
                     </button>
                 </div>
 
@@ -108,8 +125,8 @@
 
     <script>
         // Jika hostname adalah localhost, gunakan port 3000, jika tidak gunakan path relatif /api
-        const LOCAL_SERVER = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
-            ? "http://localhost:3000" 
+        const LOCAL_SERVER = window.location.protocol === "file:" || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+            ? "http://localhost:3000"
             : "/api";
         const logArea = document.getElementById('logArea');
         
@@ -178,10 +195,10 @@
             const creds = getCredentials();
             const btn = document.getElementById('btnLoadProducts');
             const spinner = document.getElementById('spinnerProducts');
-            const select = document.getElementById('productSelect');
-            const btnProcess = document.getElementById('btnProcess');
+            const checklist = document.getElementById('productChecklist');
+            const selectAll = document.getElementById('selectAllProducts');
 
-            btn.disabled = true; spinner.classList.remove('hidden'); select.disabled = true;
+            btn.disabled = true; spinner.classList.remove('hidden'); selectAll.disabled = true;
             clearLog();
 
             try {
@@ -227,18 +244,30 @@
                 }
 
                 allProducts.sort((a, b) => a.name.localeCompare(b.name));
-                select.innerHTML = '<option value="">-- Pilih Produk --</option>';
+                checklist.innerHTML = '';
                 allProducts.forEach(p => {
-                    const option = document.createElement('option');
-                    option.value = p.sku;
-                    option.dataset.productId = p.id || "";
-                    option.dataset.productName = p.name || "";
-                    option.text = `${p.name} (SKU: ${p.sku})`;
-                    select.appendChild(option);
+                    const row = document.createElement('label');
+                    row.className = 'flex items-center gap-2 py-1 px-1 hover:bg-gray-50 rounded cursor-pointer text-gray-800';
+
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.className = 'product-check';
+                    cb.dataset.sku = p.sku;
+                    cb.dataset.id = p.id || '';
+                    cb.dataset.name = p.name || '';
+                    cb.addEventListener('change', updateSelectedCount);
+
+                    const span = document.createElement('span');
+                    span.textContent = `${p.name} (SKU: ${p.sku})`;
+
+                    row.appendChild(cb);
+                    row.appendChild(span);
+                    checklist.appendChild(row);
                 });
 
-                select.disabled = false;
-                btnProcess.disabled = false;
+                selectAll.disabled = false;
+                selectAll.checked = false;
+                updateSelectedCount();
                 log(`Selesai! ${allProducts.length} produk dimuat.`, "highlight");
 
             } catch (error) {
@@ -248,42 +277,55 @@
             }
         }
 
-        // --- SALES SEARCH (VIA PROXY) ---
+        function updateSelectedCount() {
+            const checked = document.querySelectorAll('.product-check:checked').length;
+            document.getElementById('selectedCount').innerText = `${checked} dipilih`;
+            document.getElementById('btnProcess').disabled = checked === 0;
+        }
+
+        function toggleSelectAllProducts(el) {
+            document.querySelectorAll('.product-check').forEach(cb => cb.checked = el.checked);
+            updateSelectedCount();
+        }
+
+        // --- SALES SEARCH (VIA PROXY, BULK) ---
         async function startSalesProcess() {
             const creds = getCredentials();
-            const productSelect = document.getElementById('productSelect');
-            const selectedOption = productSelect.options[productSelect.selectedIndex];
-            const targetSku = selectedOption?.value || "";
-            const targetProductId = selectedOption?.dataset?.productId || "";
-            const targetProductName = selectedOption?.dataset?.productName || "";
+            const checked = Array.from(document.querySelectorAll('.product-check:checked'));
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
 
-            if (!targetSku) return alert("Pilih produk!");
-            
+            if (checked.length === 0) return alert("Pilih minimal satu produk!");
+
+            // Satu target per produk terpilih; order di-fetch sekali lalu dicocokkan ke semua target sekaligus.
+            const targets = checked.map(cb => ({
+                sku: cb.dataset.sku,
+                id: cb.dataset.id,
+                name: cb.dataset.name,
+                skuLc: (cb.dataset.sku || "").toLowerCase().trim(),
+                idLc: (cb.dataset.id || "").toLowerCase().trim(),
+                nameLc: (cb.dataset.name || "").toLowerCase().trim(),
+                dailySales: {},
+                totalQty: 0
+            }));
+
             const btn = document.getElementById('btnProcess');
             const spinner = document.getElementById('btnSpinner');
             const resultBox = document.getElementById('resultBox');
 
             btn.disabled = true; spinner.classList.remove('hidden'); resultBox.classList.add('hidden');
-            document.getElementById('btnExportCsv').classList.add('hidden');
-            window.currentCsvContent = "";
+            document.getElementById('btnExportExcel').classList.add('hidden');
+            window.currentTargets = null;
             clearLog();
 
             try {
                 const token = await getAccessToken(creds);
                 let page = 1;
                 let hasNext = true;
-                let totalQuantitySold = 0;
                 let totalOrdersChecked = 0;
-                let dailySales = {}; // Map: "YYYY-MM-DD" -> Quantity
 
-                const targetSkuLc = targetSku.toLowerCase().trim();
-                const targetProductIdLc = String(targetProductId || "").toLowerCase().trim();
-                const targetProductNameLc = String(targetProductName || "").toLowerCase().trim();
-
-                log(`Mencari penjualan SKU: ${targetSku}`, "highlight");
-                if (targetProductId) log(`Product ID: ${targetProductId}`, "highlight");
+                log(`Mencari penjualan untuk ${targets.length} produk...`, "highlight");
+                targets.forEach(t => log(`  - ${t.name} (SKU: ${t.sku})`));
 
                 while (hasNext) {
                     log(`Cek Orders Halaman ${page}...`);
@@ -328,22 +370,23 @@
                                 const itemProductIdLc = item.product_id ? String(item.product_id).toLowerCase().trim() : "";
                                 const itemProductNameLc = item.product_name ? String(item.product_name).toLowerCase().trim() : "";
 
-                                const isSkuMatch = candidateSkus.includes(targetSkuLc);
-                                const isProductIdMatch = !!(targetProductIdLc && itemProductIdLc && itemProductIdLc === targetProductIdLc);
-                                const isNameMatch = !!(targetProductNameLc && itemProductNameLc && itemProductNameLc === targetProductNameLc);
+                                targets.forEach(t => {
+                                    const isSkuMatch = candidateSkus.includes(t.skuLc);
+                                    const isProductIdMatch = !!(t.idLc && itemProductIdLc && itemProductIdLc === t.idLc);
+                                    const isNameMatch = !!(t.nameLc && itemProductNameLc && itemProductNameLc === t.nameLc);
 
-                                if (isSkuMatch || isProductIdMatch || isNameMatch) {
-                                    const qty = (item.quantity || 0);
-                                    totalQuantitySold += qty;
-                                    
-                                    // Track daily sales
-                                    if (order.order_date) {
-                                        const dateStr = order.order_date.substring(0, 10); // "YYYY-MM-DD"
-                                        dailySales[dateStr] = (dailySales[dateStr] || 0) + qty;
+                                    if (isSkuMatch || isProductIdMatch || isNameMatch) {
+                                        const qty = (item.quantity || 0);
+                                        t.totalQty += qty;
+
+                                        if (order.order_date) {
+                                            const dateStr = order.order_date.substring(0, 10); // "YYYY-MM-DD"
+                                            t.dailySales[dateStr] = (t.dailySales[dateStr] || 0) + qty;
+                                        }
+
+                                        log(`   [MATCH] ${t.name} - Order #${order.order_reference} (${order.order_date?.substring(0,10)}): +${qty}`, "highlight");
                                     }
-
-                                    log(`   [MATCH] Order #${order.order_reference} (${order.order_date?.substring(0,10)}): +${qty}`, "highlight");
-                                }
+                                });
                             });
                         });
                     }
@@ -352,26 +395,29 @@
                     if (hasNext) page++;
                 }
 
+                const totalQuantitySold = targets.reduce((sum, t) => sum + t.totalQty, 0);
                 document.getElementById('resQty').innerText = totalQuantitySold + " Pcs";
                 document.getElementById('resOrders').innerText = totalOrdersChecked;
+
+                const summaryBody = document.getElementById('productSummaryBody');
+                summaryBody.innerHTML = '';
+                targets.forEach(t => {
+                    const tr = document.createElement('tr');
+                    const tdName = document.createElement('td');
+                    tdName.className = 'py-1 pr-2';
+                    tdName.textContent = t.name || t.sku;
+                    const tdQty = document.createElement('td');
+                    tdQty.className = 'py-1 text-right font-semibold';
+                    tdQty.textContent = t.totalQty;
+                    tr.appendChild(tdName); tr.appendChild(tdQty);
+                    summaryBody.appendChild(tr);
+                });
+
                 resultBox.classList.remove('hidden');
 
-                // Generate CSV with all dates
-                let csv = "Date,Quantity\n";
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                
-                // Set window global for filename
-                window.currentProductName = targetProductName || targetSku || "Product";
-
-                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                    const dateIso = d.toISOString().split('T')[0];
-                    const qty = dailySales[dateIso] || 0;
-                    csv += `${dateIso},${qty}\n`;
-                }
-
-                window.currentCsvContent = csv;
-                document.getElementById('btnExportCsv').classList.remove('hidden');
+                window.currentTargets = targets;
+                window.currentDateRange = { startDate, endDate };
+                document.getElementById('btnExportExcel').classList.remove('hidden');
 
                 log("SELESAI.", "highlight");
 
@@ -381,24 +427,41 @@
                 btn.disabled = false; spinner.classList.add('hidden');
             }
         }
-        function downloadCsv() {
-            if (!window.currentCsvContent) return;
-            const blob = new Blob([window.currentCsvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            
-            // Clean filename
-            const productNameSafe = (window.currentProductName || "sales_report")
-                .replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        function downloadExcel() {
+            const targets = window.currentTargets;
+            if (!targets || !targets.length) return;
+            const { startDate, endDate } = window.currentDateRange;
+
+            const wb = XLSX.utils.book_new();
+            const usedNames = new Set();
+
+            targets.forEach(t => {
+                const rows = [["Tanggal", "Jumlah"]];
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    const dateIso = d.toISOString().split('T')[0];
+                    rows.push([dateIso, t.dailySales[dateIso] || 0]);
+                }
+                rows.push(["Total", t.totalQty]);
+
+                // Nama sheet Excel maks 31 char, tanpa \ / ? * [ ] :
+                const baseName = (t.name || t.sku || "Produk").replace(/[\\\/\?\*\[\]:]/g, ' ').trim().substring(0, 31) || "Produk";
+                let sheetName = baseName;
+                let counter = 2;
+                while (usedNames.has(sheetName.toLowerCase())) {
+                    const suffix = ` (${counter})`;
+                    sheetName = baseName.substring(0, 31 - suffix.length) + suffix;
+                    counter++;
+                }
+                usedNames.add(sheetName.toLowerCase());
+
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            });
+
             const dateStr = new Date().toISOString().split('T')[0];
-            const fileName = `${productNameSafe}_${dateStr}.csv`;
-            
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            XLSX.writeFile(wb, `laporan_penjualan_${dateStr}.xlsx`);
         }
     </script>
 </body>
